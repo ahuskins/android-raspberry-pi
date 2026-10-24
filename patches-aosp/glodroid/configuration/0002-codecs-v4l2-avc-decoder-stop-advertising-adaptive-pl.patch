@@ -1,0 +1,41 @@
+From 6179db59457bd24a823fc320eb03e92fdbcb436a Mon Sep 17 00:00:00 2001
+From: Adam Huskins <ahuskins@gmail.com>
+Date: Sat, 24 Oct 2026 02:00:17 -0400
+Subject: [PATCH] codecs: v4l2 avc decoder: stop advertising adaptive-playback
+
+On Raspberry Pi 4 the bcm2835-codec stateful decoder cannot change
+resolution on a running queue. When the decoder advertises the
+adaptive-playback feature, ExoPlayer/Media3 based apps (Disney+, Hulu,
+Peacock) reuse the codec across adaptive-bitrate resolution switches.
+The driver then rejects the format change:
+
+  bcm2835-codec bcm2835-codec: vidioc_s_fmt queue busy
+
+and the component fails with C2 error 0xe, which the apps surface as
+"Decoder failed: c2.v4l2.avc.decoder" 15 s to a few minutes into
+playback.
+
+Without adaptive-playback, Media3 re-creates the decoder on resolution
+changes and playback continues. Tested on rpi4 (Android 14, build
+7104721dd81f) by bind-mounting the modified file over
+/vendor/etc/media_codecs_v4l2_c2.xml and restarting the media service:
+Disney+ plays through quality switches with no decoder errors.
+---
+ common/codecs/media_codecs_v4l2_c2.xml | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/common/codecs/media_codecs_v4l2_c2.xml b/common/codecs/media_codecs_v4l2_c2.xml
+index e2ae7a0..f3cfc85 100644
+--- a/common/codecs/media_codecs_v4l2_c2.xml
++++ b/common/codecs/media_codecs_v4l2_c2.xml
+@@ -22,7 +22,6 @@
+            <Limit name="bitrate" range="1-62500000" />
+            <Limit name="concurrent-instances" max="8" />
+            <Limit name="performance-point-3840x2160" range="30-30" />
+-           <Feature name="adaptive-playback" />
+        </MediaCodec>
+     </Decoders>
+ </MediaCodecs>
+-- 
+2.43.0
+
